@@ -1,0 +1,50 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows you to manually trigger the build from GitHub UI
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-14 # macOS runner provided by GitHub
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install XcodeGen
+      run: brew install xcodegen
+
+    - name: Generate Xcode Project
+      run: xcodegen generate
+
+    - name: Build Application
+      run: |
+        # Build the Xcode project for a generic iOS device and output to the ./build folder
+        # We explicitly disable Code Signing because we will sign it locally on Windows later!
+        xcodebuild clean build \
+          -project WealthFlow.xcodeproj \
+          -scheme WealthFlow \
+          -configuration Release \
+          -destination 'generic/platform=iOS' \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          -sdk iphoneos \
+          SYMROOT=$PWD/build
+
+    - name: Package into IPA
+      run: |
+        # Turn the raw .app into a sideloadable .ipa file
+        mkdir -p build/Payload
+        mv build/Release-iphoneos/WealthFlow.app build/Payload/
+        cd build
+        zip -r WealthFlow.ipa Payload
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WealthFlow-IPA
+        path: build/WealthFlow.ipa
